@@ -659,28 +659,29 @@ async function cat(args) {
 }
 
 // How the user invoked us, so the landing page can echo a runnable command.
-// Prefer a path relative to the cwd (keeps the folder, e.g. 'bin/onedrive')
-// and fall back to the basename when we live outside the cwd (e.g. an
-// installed 'onedrive' on the PATH).
+// Whatever this returns is pasted into a shell verbatim, so every branch has
+// to be runnable on its own: a short path relative to the cwd when we live
+// there (e.g. 'bin/onedrive'), the bare name when we are on the PATH (e.g. an
+// installed 'onedrive-cli'), and an absolute path otherwise.
 function commandName() {
     const argv1 = process.argv[1] || 'onedrive-cli'
     const rel = Path.relative(process.cwd(), argv1)
     const parts = rel.split(Path.sep)
-    // Running from a directory *above* us yields a long relative path that
-    // reads like a mangled absolute one -- from '/' this file becomes
-    // 'Users/me/dev/onedrive-cli/bin/onedrive', which is neither obviously
-    // runnable nor something to hand to the landing page. Keep at most one
-    // leading folder, and fall back to the basename beyond that.
-    if (
-        !rel ||
-        parts.length > 2 ||
-        rel.startsWith('..') ||
-        Path.isAbsolute(rel)
-    ) {
+    // Keep a relative path only while it stays short and below the cwd. A cwd
+    // *above* us yields a long relative path that reads like a mangled
+    // absolute one -- from '/' this file becomes
+    // 'Users/me/dev/onedrive-cli/bin/onedrive', missing its leading slash.
+    if (rel && parts.length <= 2 && !rel.startsWith('..')) {
+        // A bare name only runs as './name'; with a folder it already does.
+        return parts.length === 1 ? '.' + Path.sep + rel : rel
+    }
+    // On the PATH: the bare name is what the user typed and what reads best.
+    const dirs = (process.env.PATH || '').split(Path.delimiter)
+    if (dirs.includes(Path.dirname(argv1))) {
         return Path.basename(argv1)
     }
-    // A bare name is only runnable as './name'; with a folder it already is.
-    return parts.length === 1 ? '.' + Path.sep + rel : rel
+    // Anywhere else, only an absolute path is guaranteed to run.
+    return Path.resolve(argv1)
 }
 
 function buildLoginUrl(readonly, state) {
