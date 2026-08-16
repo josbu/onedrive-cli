@@ -520,8 +520,13 @@
                     var state = param(window.location.hash, 'state') || ''
                     var lb = /^([0-9a-f]+)\.(\d+)$/.exec(state)
                     if (lb) {
+                        // 127.0.0.1, not "localhost": the listener binds that
+                        // address (localhost can resolve to ::1 first), and the
+                        // literal is what browsers treat as trustworthy, so
+                        // this http:// request survives on an https:// page
+                        // instead of being blocked or upgraded as mixed content.
                         var target =
-                            'http://localhost:' +
+                            'http://127.0.0.1:' +
                             lb[2] +
                             '/callback?nonce=' +
                             encodeURIComponent(lb[1]) +

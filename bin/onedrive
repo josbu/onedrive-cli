@@ -732,6 +732,18 @@ function loopbackLogin(readonly) {
     server.on('request', (req, res) => {
         const u = new URL(req.url, 'http://127.0.0.1')
         res.setHeader('Access-Control-Allow-Origin', '*')
+        // Chrome gates requests from a public page to a loopback address behind
+        // a Private Network Access preflight, so the callback page's fetch
+        // arrives as OPTIONS first. Answer it as a preflight and nothing more:
+        // treating it as the delivery would settle the token and let login()
+        // close the listener before the real GET lands, leaving the page unable
+        // to read a 200 and stuck on the manual-copy fallback.
+        if (req.method === 'OPTIONS') {
+            res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS')
+            res.setHeader('Access-Control-Allow-Private-Network', 'true')
+            res.setHeader('Access-Control-Max-Age', '600')
+            return res.writeHead(204).end()
+        }
         if (u.pathname !== '/callback') {
             return res.writeHead(404).end()
         }
