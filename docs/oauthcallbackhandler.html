@@ -532,24 +532,32 @@
                             encodeURIComponent(lb[1]) +
                             '&token=' +
                             encodeURIComponent(access_token)
-                        // The listener replies 200 only when it accepted the
-                        // token (nonce matched), and its ACAO:* header lets us
-                        // read that status -- so response.ok is a genuine ack,
-                        // not just "something answered on that port".
+                        // Deliver over both channels the browser might allow,
+                        // and take the ack from whichever one it permitted.
+                        // Chrome gates a public page's access to loopback
+                        // addresses: the CORS fetch is usually blocked outright
+                        // while a no-cors <img> GET still reaches the listener,
+                        // which is how the CLI ends up holding the token with
+                        // this page unable to read any response. Delivery is
+                        // idempotent -- same nonce and token, and the listener
+                        // settles once -- so sending twice is safe.
+                        //
+                        // The listener answers an accepted token with a real
+                        // 1x1 GIF, so a decoded image is a genuine ack; its
+                        // refusal is text, which fails to decode and lands in
+                        // onerror. Only success ever changes the UI, so a
+                        // blocked or refused channel just leaves the copy
+                        // fallback in place.
+                        var img = new Image()
+                        img.onload = accepted
+                        img.src = target
                         fetch(target, { mode: 'cors' })
                             .then(function (resp) {
                                 if (resp.ok) {
                                     accepted()
                                 }
-                                // Non-2xx: the CLI refused the token (stale or
-                                // tampered state) -- keep the copy fallback.
                             })
-                            .catch(function () {
-                                // fetch blocked? fire an <img> GET as a last
-                                // resort. Delivery only: an image load gives no
-                                // readable status, so never claim success here.
-                                new Image().src = target
-                            })
+                            .catch(function () {})
                     }
 
                     // The CLI confirmed it saved the token: say so and retire
