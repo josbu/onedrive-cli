@@ -724,6 +724,17 @@ function withTimeout(promise, ms) {
     return Promise.race([promise, timeout]).finally(() => clearTimeout(timer))
 }
 
+// A 1x1 transparent GIF, sent as the reply to an accepted token. The callback
+// page has to deliver the token with an <img> GET (Chrome blocks its fetch to a
+// loopback address; a no-cors subresource still gets through), and an image load
+// exposes no status -- only whether the bytes decoded. Answering with real image
+// bytes when, and only when, we accepted the token turns that into the ack the
+// page can observe: a refusal is text, which fails to decode.
+const ACK_GIF = Buffer.from(
+    'R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==',
+    'base64'
+)
+
 function loopbackLogin(readonly) {
     const nonce = Crypto.randomBytes(16).toString('hex')
     const server = Http.createServer()
@@ -751,8 +762,11 @@ function loopbackLogin(readonly) {
         if (!token || u.searchParams.get('nonce') !== nonce) {
             return res.writeHead(400).end('bad request')
         }
-        res.writeHead(200, { 'Content-Type': 'text/plain' })
-        res.end('onedrive-cli received the token. You can close this tab.')
+        res.writeHead(200, {
+            'Content-Type': 'image/gif',
+            'Content-Length': ACK_GIF.length,
+        })
+        res.end(ACK_GIF)
         settle(extractToken(token))
     })
     return new Promise((resolve, reject) => {
