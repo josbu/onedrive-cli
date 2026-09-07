@@ -2,49 +2,52 @@
 
 Cross-platform command line interface for OneDrive (Personal)
 
-## Development
-
-A [Nix](https://nixos.org) flake provides the package and a dev shell with all
-dependencies. Run `nix develop` (or use [Direnv](https://direnv.net)'s `use flake`)
-for the shell, and `nix build` / `nix run` to build or run the CLI. The legacy
-`shell.nix` still works with `nix-shell`.
-
-### Update the dependency hash
-
-After changing `package-lock.json`, refresh `npmDepsHash` in `flake.nix`:
-
-```sh
-nix run nixpkgs#prefetch-npm-deps -- package-lock.json
-```
-
 ## Installation
 
-From source:
+With `npm`:
 
 ```sh
-$ git clone https://github.com/lionello/onedrive-cli.git
-$ cd onedrive-cli
-$ npm install
-$ bin/onedrive login
+npm install -g @lionello/onedrive-cli
 ```
 
-Or use `npm`:
+That installs the command as `onedrive`, with `onedrive-cli` as an alias for it.
 
-```sh
-npm install @lionello/onedrive-cli
-```
-
-Or use `nix-env`:
+Or with `nix-env`:
 
 ```sh
 nix-env -if https://github.com/lionello/onedrive-cli/archive/master.tar.gz -A package
 ```
 
+Or from source:
+
+```sh
+git clone https://github.com/lionello/onedrive-cli.git
+cd onedrive-cli
+npm install
+bin/onedrive login
+```
+
+## Getting started
+
+Sign in once, then use the drive like a filesystem:
+
+```sh
+onedrive login          # opens the Microsoft login page
+onedrive df             # check the connection and storage usage
+onedrive ls             # list your drive root
+```
+
+`login` opens your browser, then stores the access token it gets back in
+`~/.onedrive-cli-token` (or `$XDG_STATE_HOME` if that is set). Tokens are valid
+for one hour, so run `login` again when a command reports that the token
+expired. Add `-r` for a read-only token.
+
 ## Usage
 
 `usage: onedrive COMMAND [arguments]`
 
-This little utility supports the following commands:
+Run `onedrive help` (or `-h`/`--help`) for this list at any time, and
+`onedrive --version` for the installed version. The commands are:
 
 -   `album` - list, create, or edit photo albums (`ls`/`create`/`add`/`rm`)
 -   `cat` - dumps the contents of a file to stdout
@@ -60,7 +63,7 @@ This little utility supports the following commands:
 -   `mcp` - run a read-only [MCP](https://modelcontextprotocol.io) server over stdio
 -   `mkdir` - create a remote folder
 -   `mv` - move a local file to OneDrive or vice-versa
--   `rm` - delete a file from OneDrive (not implemented)
+-   `rm` - delete a file or folder from OneDrive
 -   `sendmail` - send an invitation email for editing to recipients
 -   `stat` - dump all information for particular file(s)
 -   `wget` - copy a remote URL to OneDrive (server side)
@@ -136,10 +139,12 @@ Register it with your MCP client, e.g. in `claude_desktop_config.json`:
 ##### Access token was not found; 'login' first.
 
 The `onedrive` utility needs an access token in order to read/write to your OneDrive storage.
-Use the`onedrive login` command to get the address of the Microsoft login page. After login,
-this page will redirect to the file `oauthcallbackhandler.html` (https://github.com/lionello/onedrive-cli/blob/master/docs/oauthcallbackhandler.html)
-and extract the `access_token` from the URL parameters. Copy-paste this token into the command line.
-This will save the token in a file called `~/.onedrive-cli-token`. These tokens have a validity of 1 hour.
+Run `onedrive login`: it opens the Microsoft login page, and after you sign in the
+[callback page](https://github.com/lionello/onedrive-cli/blob/master/docs/oauthcallbackhandler.html)
+hands the token straight back to the waiting command, which saves it to
+`~/.onedrive-cli-token`. If the browser runs on another machine (or the handover
+fails), the page shows the token so you can paste it at the prompt instead.
+Tokens are valid for 1 hour.
 
 ##### "An item with the same name already exists under the parent"
 
@@ -165,19 +170,53 @@ the local path, or use `:/` as a prefix for the remote path. Either one will suf
 The `chmod` command currently only supports `-w` or `-rw`. The former tried to downgrade _write_
 shares to _read_-only, whereas the latter removes all shares for the given item(s). Octal modes are accepted (for example `644`, `0700`) as well as `og-rw` or `g-w`.
 
+<!-- readme-only:start -->
+
 ## TODO
 
--   Implement `rm`
--   Support gzip/deflate encoding for downloads
--   Uploads larger than 100MiB are not yet supported (needs range API)
--   Support OneDrive for Business
--   Ability to get the link for a file
--   Skip upload/download if the SHA1 matches
--   Adding write permissions (+w) to existing share links
+Tracked on the [issue tracker](https://github.com/lionello/onedrive-cli/issues),
+so this stays a pointer rather than a second source of truth:
+
+-   [#33](https://github.com/lionello/onedrive-cli/issues/33) — uploads larger than 100 MiB (`createUploadSession`)
+-   [#36](https://github.com/lionello/onedrive-cli/issues/36) — skip the transfer when the SHA1 already matches
+-   [#34](https://github.com/lionello/onedrive-cli/issues/34) — `chmod`: granting write access (`+w`)
+-   [#37](https://github.com/lionello/onedrive-cli/issues/37) — confirm the API honours gzip/deflate on downloads
+-   [#4](https://github.com/lionello/onedrive-cli/issues/4), [#8](https://github.com/lionello/onedrive-cli/issues/8) — OneDrive for Business, via Microsoft Graph
 
 ## DONE
 
+-   Read-only [MCP](https://modelcontextprotocol.io) server (`onedrive mcp`)
+-   Photo albums via bundles (`onedrive album`)
+-   Full-text search across the drive (`onedrive grep`)
+-   Capture the OAuth token over a loopback listener instead of copy-paste
+-   Delete files and folders (`onedrive rm`)
+-   Get the sharing link for a file (`onedrive ln`)
 -   Register with NPM ([@lionello/onedrive-cli](https://www.npmjs.com/package/@lionello/onedrive-cli))
 -   Fixed OAuth redirect on Safari (https://bugs.webkit.org/show_bug.cgi?id=24175)
 -   Use XDG path spec for token file (https://specifications.freedesktop.org/basedir-spec/basedir-spec-latest.html)
 -   Using `async`/`await`
+
+<!-- readme-only:end -->
+
+## Development
+
+A [Nix](https://nixos.org) flake provides the package and a dev shell with all
+dependencies. Run `nix develop` (or use [Direnv](https://direnv.net)'s `use flake`)
+for the shell, and `nix build` / `nix run` to build or run the CLI. The legacy
+`shell.nix` still works with `nix-shell`.
+
+### Update the dependency hash
+
+After changing `package-lock.json`, refresh `npmDepsHash` in `flake.nix`:
+
+```sh
+nix run nixpkgs#prefetch-npm-deps -- package-lock.json
+```
+
+### Regenerate the website
+
+`docs/index.html` is generated from this README:
+
+```sh
+npm run readme
+```

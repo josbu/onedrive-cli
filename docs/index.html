@@ -435,45 +435,48 @@
 
 <p>Cross-platform command line interface for OneDrive (Personal)</p>
 
-<h2>Development</h2>
-
-<p>A <a href="https://nixos.org">Nix</a> flake provides the package and a dev shell with all
-dependencies. Run <code>nix develop</code> (or use <a href="https://direnv.net">Direnv</a>&#39;s <code>use flake</code>)
-for the shell, and <code>nix build</code> / <code>nix run</code> to build or run the CLI. The legacy
-<code>shell.nix</code> still works with <code>nix-shell</code>.</p>
-
-<h3>Update the dependency hash</h3>
-
-<p>After changing <code>package-lock.json</code>, refresh <code>npmDepsHash</code> in <code>flake.nix</code>:</p>
-
-<pre><code class="sh">nix run nixpkgs#prefetch-npm-deps -- package-lock.json
-</code></pre>
-
 <h2>Installation</h2>
 
-<p>From source:</p>
+<p>With <code>npm</code>:</p>
 
-<pre><code class="sh">$ git clone https://github.com/lionello/onedrive-cli.git
-$ cd onedrive-cli
-$ npm install
-$ bin/onedrive login
+<pre><code class="sh">npm install -g @lionello/onedrive-cli
 </code></pre>
 
-<p>Or use <code>npm</code>:</p>
+<p>That installs the command as <code>onedrive</code>, with <code>onedrive-cli</code> as an alias for it.</p>
 
-<pre><code class="sh">npm install @lionello/onedrive-cli
-</code></pre>
-
-<p>Or use <code>nix-env</code>:</p>
+<p>Or with <code>nix-env</code>:</p>
 
 <pre><code class="sh">nix-env -if https://github.com/lionello/onedrive-cli/archive/master.tar.gz -A package
 </code></pre>
+
+<p>Or from source:</p>
+
+<pre><code class="sh">git clone https://github.com/lionello/onedrive-cli.git
+cd onedrive-cli
+npm install
+bin/onedrive login
+</code></pre>
+
+<h2>Getting started</h2>
+
+<p>Sign in once, then use the drive like a filesystem:</p>
+
+<pre><code class="sh">onedrive login          # opens the Microsoft login page
+onedrive df             # check the connection and storage usage
+onedrive ls             # list your drive root
+</code></pre>
+
+<p><code>login</code> opens your browser, then stores the access token it gets back in
+<code>~/.onedrive-cli-token</code> (or <code>$XDG_STATE_HOME</code> if that is set). Tokens are valid
+for one hour, so run <code>login</code> again when a command reports that the token
+expired. Add <code>-r</code> for a read-only token.</p>
 
 <h2>Usage</h2>
 
 <p><code>usage: onedrive COMMAND [arguments]</code></p>
 
-<p>This little utility supports the following commands:</p>
+<p>Run <code>onedrive help</code> (or <code>-h</code>/<code>--help</code>) for this list at any time, and
+<code>onedrive --version</code> for the installed version. The commands are:</p>
 
 <ul>
 <li>  <code>album</code> - list, create, or edit photo albums (<code>ls</code>/<code>create</code>/<code>add</code>/<code>rm</code>)</li>
@@ -490,7 +493,7 @@ $ bin/onedrive login
 <li>  <code>mcp</code> - run a read-only <a href="https://modelcontextprotocol.io">MCP</a> server over stdio</li>
 <li>  <code>mkdir</code> - create a remote folder</li>
 <li>  <code>mv</code> - move a local file to OneDrive or vice-versa</li>
-<li>  <code>rm</code> - delete a file from OneDrive (not implemented)</li>
+<li>  <code>rm</code> - delete a file or folder from OneDrive</li>
 <li>  <code>sendmail</code> - send an invitation email for editing to recipients</li>
 <li>  <code>stat</code> - dump all information for particular file(s)</li>
 <li>  <code>wget</code> - copy a remote URL to OneDrive (server side)</li>
@@ -567,10 +570,12 @@ cannot modify the drive. It exposes these tools:</p>
 <h5>Access token was not found; &#39;login&#39; first.</h5>
 
 <p>The <code>onedrive</code> utility needs an access token in order to read/write to your OneDrive storage.
-Use the<code>onedrive login</code> command to get the address of the Microsoft login page. After login,
-this page will redirect to the file <code>oauthcallbackhandler.html</code> (<a href="https://github.com/lionello/onedrive-cli/blob/master/docs/oauthcallbackhandler.html">https://github.com/lionello/onedrive-cli/blob/master/docs/oauthcallbackhandler.html</a>)
-and extract the <code>access_token</code> from the URL parameters. Copy-paste this token into the command line.
-This will save the token in a file called <code>~/.onedrive-cli-token</code>. These tokens have a validity of 1 hour.</p>
+Run <code>onedrive login</code>: it opens the Microsoft login page, and after you sign in the
+<a href="https://github.com/lionello/onedrive-cli/blob/master/docs/oauthcallbackhandler.html">callback page</a>
+hands the token straight back to the waiting command, which saves it to
+<code>~/.onedrive-cli-token</code>. If the browser runs on another machine (or the handover
+fails), the page shows the token so you can paste it at the prompt instead.
+Tokens are valid for 1 hour.</p>
 
 <h5>&quot;An item with the same name already exists under the parent&quot;</h5>
 
@@ -596,26 +601,26 @@ the local path, or use <code>:/</code> as a prefix for the remote path. Either o
 <p>The <code>chmod</code> command currently only supports <code>-w</code> or <code>-rw</code>. The former tried to downgrade <em>write</em>
 shares to <em>read</em>-only, whereas the latter removes all shares for the given item(s). Octal modes are accepted (for example <code>644</code>, <code>0700</code>) as well as <code>og-rw</code> or <code>g-w</code>.</p>
 
-<h2>TODO</h2>
+<h2>Development</h2>
 
-<ul>
-<li>  Implement <code>rm</code></li>
-<li>  Support gzip/deflate encoding for downloads</li>
-<li>  Uploads larger than 100MiB are not yet supported (needs range API)</li>
-<li>  Support OneDrive for Business</li>
-<li>  Ability to get the link for a file</li>
-<li>  Skip upload/download if the SHA1 matches</li>
-<li>  Adding write permissions (+w) to existing share links</li>
-</ul>
+<p>A <a href="https://nixos.org">Nix</a> flake provides the package and a dev shell with all
+dependencies. Run <code>nix develop</code> (or use <a href="https://direnv.net">Direnv</a>&#39;s <code>use flake</code>)
+for the shell, and <code>nix build</code> / <code>nix run</code> to build or run the CLI. The legacy
+<code>shell.nix</code> still works with <code>nix-shell</code>.</p>
 
-<h2>DONE</h2>
+<h3>Update the dependency hash</h3>
 
-<ul>
-<li>  Register with NPM (<a href="https://www.npmjs.com/package/@lionello/onedrive-cli">@lionello/onedrive-cli</a>)</li>
-<li>  Fixed OAuth redirect on Safari (<a href="https://bugs.webkit.org/show_bug.cgi?id=24175">https://bugs.webkit.org/show_bug.cgi?id=24175</a>)</li>
-<li>  Use XDG path spec for token file (<a href="https://specifications.freedesktop.org/basedir-spec/basedir-spec-latest.html">https://specifications.freedesktop.org/basedir-spec/basedir-spec-latest.html</a>)</li>
-<li>  Using <code>async</code>/<code>await</code></li>
-</ul>
+<p>After changing <code>package-lock.json</code>, refresh <code>npmDepsHash</code> in <code>flake.nix</code>:</p>
+
+<pre><code class="sh">nix run nixpkgs#prefetch-npm-deps -- package-lock.json
+</code></pre>
+
+<h3>Regenerate the website</h3>
+
+<p><code>docs/index.html</code> is generated from this README:</p>
+
+<pre><code class="sh">npm run readme
+</code></pre>
 </main>
 <footer class="site-footer">
   <span class="prompt">$</span>
