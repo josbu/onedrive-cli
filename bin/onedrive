@@ -17,6 +17,7 @@ const TOKEN_PATH = Path.join(
     '.onedrive-cli-token'
 )
 const API_BASE_URL = 'https://api.onedrive.com/v1.0'
+const VERSION = require('../package.json').version
 
 const httpsAgent = new Https.Agent({ keepAlive: true })
 
@@ -80,7 +81,8 @@ function debugPrint(...data) {
 }
 
 function print(data) {
-    // FIXME: handle false return value by hooking the drain event
+    // FIXME(#70): a false return means stdout is backed up; without
+    // hooking 'drain' the rest of a large file buffers in memory.
     process.stdout.write(data)
 }
 
@@ -346,7 +348,7 @@ async function upload(op, from, target) {
     target = sanitize(target)
     const mime = Mime.lookup(from)
     const data = await FS.readFile(from)
-    // TODO: skip upload if SHA1 is the same
+    // TODO(#36): skip the PUT when the target's sha1Hash already matches
     const result = await call(
         target + '/content?@name.conflictBehavior=fail',
         'PUT',
@@ -366,6 +368,8 @@ async function upload(op, from, target) {
         }
     } catch (err) {
         if (err.statusCode === 404) {
+            // A 404 on the PUT is how the API reports the simple-upload
+            // size cap; resumable sessions are #33.
             return console.error(
                 'Skipped. Uploads larger than 100MiB are not yet supported.'
             )
@@ -423,7 +427,7 @@ async function download(op, from, target) {
         target = target + Path.basename(from)
     }
     const remote = sanitize(from)
-    // TODO: avoid download if the SHA1 is the same
+    // TODO(#36): skip the GET when the local file's SHA1 already matches
     const data = await getContent(remote + '/content')
     await FS.writeFile(target, data)
     if (op === MOVE) {
@@ -450,7 +454,9 @@ function moveItem(item, path, name) {
     const data = {
         name: name,
         parentReference: {
-            path: sanitize(path), // FIXME: double escapes
+            // FIXME(#71): sanitize() escapes for a URL, but this is a
+            // JSON body -- a parent with a space lands as 'Camera%20Roll'.
+            path: sanitize(path),
         },
     }
     return call(remote, 'PATCH', data)
@@ -514,7 +520,7 @@ async function cp_paged(cont, target) {
         return
     }
     const result = await call(cont)
-    // TODO: copy by Item ID instead of path?
+    // TODO(#71): copy by Item ID instead of path?
     const files = result.value.filter(info => !is_folder(info)).map(absolute)
     await cp_mv(COPY, files, target + '/')
     await cp_paged(result['@odata.nextLink'], target)
@@ -936,14 +942,14 @@ const MINUS_RW = '-rw'
 async function chmod1(mode, remote) {
     remote = sanitize(remote)
     const result = await call(remote + '/permissions')
-    // +w  x        POST (TODO)
-    // +w  read     PATCH (TODO)
+    // +w  x        POST (TODO(#34))
+    // +w  read     PATCH (TODO(#34))
     // +w  write    NOP
     // -w  write    PATCH
     // -w  read     NOP
     // -rw write    DELETE
     // -rw read     DELETE
-    let ok // FIXME track result from all shares
+    let ok // FIXME(#34): track the result from all shares, not just the last
     for (const cur of result.value) {
         if (mode === MINUS_RW) {
             ok = await call(remote + '/permissions/' + cur.id, 'DELETE')
@@ -1687,18 +1693,30 @@ async function main(argv) {
         Colors.disable()
     }
 
+    // `help` is the verb, but agents and people alike reach for the GNU-style
+    // flags first, so -h/--help and -v/--version are aliases rather than
+    // unknown commands. (Keep the comment out of the case list: a comment
+    // between labels makes an empty case non-empty for no-fallthrough.)
     switch (argv[2]) {
         case undefined:
         case 'help':
+        case '-h':
+        case '--help':
             console.log(
                 Colors.bold(
                     '\nOneDrive Command Line Interface (c) Lionello Lunesu'
                 )
             )
             console.log(
-                '\nusage: onedrive COMMAND [arguments]\n\ncommands: album cat chmod cp df find grep help ln login ls mcp mkdir mv rm sendmail stat wget'
+                '\nusage: ' +
+                    commandName() +
+                    ' COMMAND [arguments]\n\ncommands: album albums cat chmod cp df find grep help ln login ls mcp mkdir mv rm sendmail stat wget'
             )
             return
+
+        case '-v':
+        case '--version':
+            return console.log(VERSION)
 
         case 'album':
             return album(argv.slice(3))
@@ -1756,7 +1774,13 @@ async function main(argv) {
             return wget(argv.slice(3))
 
         default:
-            throw Error('Unknown command: ' + argv[2])
+            throw Error(
+                'Unknown command: ' +
+                    argv[2] +
+                    "\nRun '" +
+                    commandName() +
+                    " help' for the list of commands."
+            )
     }
 }
 
